@@ -166,6 +166,8 @@ python main.py # ou debug_main.py para ativar o modo Debug, que permite visualiz
 1. Digite sua pergunta em português ou inglês.
 2. Para encerrar a sessão, digite `sair` ou `exit`.
 
+![](imgs/04.png)
+
 ---
 
 ## 🛠️ Tecnologias Utilizadas
