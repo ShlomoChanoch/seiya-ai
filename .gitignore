@@ -1,0 +1,13 @@
+# Arquivos gerados pelo FAISS
+vectorstore/
+
+# Cache do Python
+__pycache__/
+*.pyc
+
+# Ambientes virtuais
+venv/
+.venv/
+
+# Variáveis de Ambiente
+.env
