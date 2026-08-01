@@ -1,10 +1,11 @@
 # 🎠 Seiya AI: Agente de IA para o Guia Oficial de Engenharia Back-end da Santo Pegasus Soluciones
 
-**Atenção:** Este projeto foi criado como challenge para o Tech AI Builder da Oracle Next Education (ONE) em parceria com a Alura. A Santo Pegasus Soluciones é fictícia.
+**Atenção:** 
+Este projeto foi desenvolvido como parte do challenge Tech AI Builder da Oracle Next Education (ONE) em parceria com a Alura, e está disponível em https://github.com/ShlomoChanoch/seiya-ai. A Santo Pegasus Soluciones é fictícia.
 
-Este agente CLI foi desenvolvido para orientar engenheiros de software nos padrões de qualidade back-end da Santo Pegasus Soluciones. O sistema realiza segmentação semântica por seções, ranqueia com precisão as respostas através de uma arquitetura de duas etapas (*Retrieval + Re-ranking*) e responde a dúvidas com forte restrição e fidelidade ao contexto fornecido.
+Este agente CLI foi desenvolvido para orientar engenheiros de software nos padrões de qualidade back-end da Santo Pegasus Soluciones. O sistema realiza segmentação semântica por seções, ranqueia com precisão as respostas através de uma arquitetura de duas etapas (*Retrieval + Re-ranking*) e responde a dúvidas com alta fidelidade ao contexto fornecido.
 
-O modelo **DeepSeek-R1** permite execução local mesmo em máquinas sem GPU dedicada nem necessidade de chave de API, com custo por token marginal e previsível. Ele também não consome GPU para rodar, embora com uma NVIDIA RTX 3060 12GB fique bem mais rápido. Além disso, instalar o modelo sem depender de chaves de API é excelente para soberania de IA e evitar os preços dinâmicos, especialmente apropriado em ambientes on-premises sem data center dedicado.
+O modelo DeepSeek-R1 pode ser executado apenas em CPU, dispensando GPU dedicada, embora uma NVIDIA RTX 3060 12 GB reduza o tempo de inferência e melhore a velocidade de resposta. Lembre-se de que, quando uma GPU compatível está disponível, o Ollama pode utilizá-la para melhorar a inferência. Além disso, instalar o modelo **sem depender de chaves de API** é excelente para **soberania de IA** e evitar os preços dinâmicos, muito bom para ambientes on-premises sem data center dedicado.
 
 ---
 
@@ -36,8 +37,8 @@ flowchart TD
 2. **Recuperação e Re-ranking (`main.py`):**
    - **Busca Inicial (FAISS):** Busca K=15 trechos candidatos por similaridade vetorial.
    - **Re-ranking (Cross-Encoder):** Avalia e reordena os trechos calculando o *Cross-Score* direto entre a pergunta e o conteúdo do trecho, extraindo o candidato mais relevante (Top-1).
-   - **Generic Query Override:** Identifica perguntas genéricas de resumo (ex: *"sobre o que é este documento?"*) e injeta automaticamente as seções iniciais do documento.
-3. **Geração (DeepSeek-R1):** O modelo R1 sintetiza a resposta estritamente baseada no contexto recuperado, eliminando alucinações e limpando a cadeia de pensamento (`<think>...</think>`).
+   - **Generic Query Override:** Identifica perguntas genéricas de resumo (ex: *"sobre o que é este documento?"*) e injeta automaticamente as seções iniciais do documento. Perguntas muito genéricas sofrem com buscas vetoriais, pois não possuem termos específicos. O nosso sistema retorna às seções introdutórias do documento.
+3. **Geração (DeepSeek-R1):** O modelo R1 sintetiza a resposta estritamente baseada no contexto recuperado, reduzindo alucinações e limpando a cadeia de pensamento (`<think>...</think>`).
 
 ---
 
@@ -46,6 +47,7 @@ flowchart TD
 ```text
 ├── data/
 │   └── documento.pdf         # Arquivo PDF de entrada para processamento
+├── imgs/                     # Imagens de documentação de uso do OCI e do agente
 ├── terraform/                # Configuração de infraestrutura na OCI (opcional)
 │   ├── main.tf           
 │   ├── outputs.tf
@@ -84,7 +86,7 @@ Módulo principal de interação do usuário com a base de conhecimento.
 
 
 * **Tratamento de Perguntas Genéricas:** Detecta palavras-chave globais (ex: *"resuma"*, *"sobre o que"*). Em caso positivo, ignora o ranking vetorial pontual e retorna os trechos iniciais do documento (`all_docs[:2]`), garantindo um panorama geral assertivo.
-* **Prompt Estrito de Extração:** Configurado com pouca margem para suposições (*Few-shot prompting*), orientando o LLM a atuar unicamente como extrator de informações contidas no contexto.
+* **Prompt Estrito de Extração:** O prompt instrui o modelo a responder apenas utilizando o contexto recuperado, proibindo o uso de conhecimento prévio ou complementação de informações ausentes.
 * **Integração com Ollama & DeepSeek-R1:** Invoca o modelo `deepseek-r1:1.5b` e filtra o output com a função `clean_deepseek_output()`, removendo as tags internas de raciocínio (`<think>`).
 
 ---
@@ -98,6 +100,7 @@ Módulo principal de interação do usuário com a base de conhecimento.
 * Modelo DeepSeek-R1 baixado diretamente no Ollama (não necessita chave de API):
 ```bash
 ollama pull deepseek-r1:1.5b
+ollama serve # use duas instâncias, um para servir e outro para usar o agente
 ```
 
 ---
@@ -114,6 +117,12 @@ pip install --require-hashes -r requirements.txt
 A flag --require-hashes garante que as versões das dependências sejam fixas, evitando problemas de compatibilidade.
 
 Se você não deseja travar o `setuptools` no `requirements.txt`, garanta que seu ambiente já tenha o `setuptools` atualizado antes de rodar o `pip install`.
+
+Se mesmo assim, houver problemas, apenas para fins de testes, você pode instalar sem travar as versões:
+
+```bash
+pip install langchain langchain-community langchain-core faiss-cpu fastembed sentence-transformers python-dotenv pypdf ollama
+```
 
 ---
 
@@ -176,6 +185,10 @@ python main.py # ou debug_main.py para ativar o modo Debug, que permite visualiz
 
 Usando os recursos de **Oracle Cloud Infrastructure (OCI)**, é possível criar uma instância de máquina virtual com GPU dedicada para acelerar a execução do modelo DeepSeek-R1. A pasta `terraform/` contém os arquivos de configuração para provisionar a infraestrutura necessária.
 
+**Atenção:** A execução do modelo DeepSeek-R1 não requer GPU, mas a presença de uma GPU melhora significativamente o desempenho e a velocidade de resposta. Este manifesto Terraform **não** possui GPU dedicada (para cortar custos), mas você pode modificar o arquivo `main.tf` para adicionar uma GPU se desejar.
+
+### 1. Configuração do Terraform
+
 Crie uma arquivo chamado `terraform.tfvars` com suas credenciais da OCI e execute os comandos:
 
 ```bash
@@ -185,17 +198,28 @@ terraform validate
 terraform plan
 terraform apply -auto-approve
 ```
+
+![](imgs/01.png)
+![](imgs/02.png)
+
+### 2. Acesso à VM
+
 Entre na VM via SSH:
 
 ```bash
-ssh -i ubuntu@ip_da_vm
+# Dica, o Terraform te entrega o IP da VM no output
+ssh ubuntu@ip_da_vm
 ```
+
+### 3. Instalação de Dependências e Ollama
 
 Instale as dependências e o Ollama, e então execute o agente como descrito anteriormente.
 ```bash
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y python3-pip python3-venv git curl build-essential
 ```
+
+### 4. Instalação do Ollama
 
 Garanta que o Ollama esteja instalado e o modelo DeepSeek-R1 baixado na VM.
 
@@ -205,23 +229,44 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 # Garante que o serviço está ativo
 sudo systemctl enable --now ollama
-
-# Baixa o modelo do DeepSeek-R1 1.5B
-ollama pull deepseek-r1:1.5b
-
-# Teste o modelo
-ollama run deepseek-r1:1.5b "Hello"
 ```
 
-Clone este repositório Git ou envie seus arquivos para a VM. Em seguida, dentro da pasta do projeto:
+### 5. Clonando o Repositório e Configurando o Ambiente Virtual
+
+Na nova instância ssh, clone este repositório Git ou envie seus arquivos para a VM. Em seguida, dentro da pasta do projeto:
 
 ```bash
+# Clonando repositório
+git clone https://github.com/ShlomoChanoch/seiya-ai.git
+
 # Entra na pasta do projeto
-cd /seiya-ai
+cd seiya-ai
 
 # Cria o ambiente virtual
 python3 -m venv .venv
 
 # Ativa o venv
 source .venv/bin/activate
+
+# Baixa o modelo do DeepSeek-R1 1.5B
+ollama pull deepseek-r1:1.5b
+
+# Teste o modelo
+ollama run deepseek-r1:1.5b "Hello"
+
+# Deixe o modelo disponível na instância do terminal e abra outro em seguida
+ollama serve
 ```
+
+![](imgs/03.png)
+
+Prossiga como nas instruções de "Como Executar o Projeto".
+
+
+## 📄 Limitações
+
+O agente funciona com PDFs estruturados, mas não é capaz de lidar com PDFs escaneados ou imagens.
+
+O Regex depende da numeração dos capítulos.
+
+O modelo DeepSeek R1 1.5B possui capacidade limitada para perguntas muito complexas. Os vetores do RAG ajudam a mitigar esse problema, mas não eliminam completamente.
